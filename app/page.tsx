@@ -1,12 +1,11 @@
 
-import HomeChat from "../component/HomeChat"
 
 
+import SendText from "@/component/SendText";
 export default function Home() {
   return (
     <div>
-      <HomeChat/>
-
+    <SendText/>
      
     </div>
   );

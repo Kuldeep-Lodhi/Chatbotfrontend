@@ -1,250 +1,116 @@
 "use client";
+import { useState, useRef, useEffect } from "react";
+import Sidebar from "./Sidebar";
+import Header from "./Header";
+import ChatMessages from "./ChatMessages";
+import ChatInput from "./ChatInput";
 
+export type chatHistory = { role: "user" | "bot"; content: string };
+export type chatArray = { id: string; chatName: string; chatHistoryArray: chatHistory[] };
 
+export default function SendText() {
+  const [inputmsg, setInputmsg] = useState<string>("");
+  const [history, setHistory] = useState<chatHistory[]>([]);
+  const [allChatHistory, setAllChatHistory] = useState<chatArray[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [isStream, setIsStream] = useState<boolean>(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
+  const abortRef = useRef<AbortController | null>(null);
 
-import { useState, useRef, useEffect } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-
-
-export type chatHistory = {
-    role: "user" | "bot",
-    content: string
-
-}
-type chatArray = {
-    id: string,
-    chatHistoryArray: chatHistory[]
-}
-
-
-
-function SendText() {
-    let [inputmsg, Setinputmsg] = useState<string>("")
-    let [toggleTyped, SettoggleTyped] = useState<boolean>(false)
-    let [history, setHistory] = useState<chatHistory[]>([])
-    let [isStream, setisStream] = useState<boolean>(false)
-    let abortRef = useRef<AbortController | null>(null)
-    let [allChatHistory, SetallChatHistory] = useState<chatArray[]>([])
-
-
-
-    function handleAllChatsHistory(){
-        if(history.length === 0) return
-
-        const newSession:chatArray ={
-
-            id:Date.now().toString(),
-            chatHistoryArray:[...history]
-
-        }
-
-        SetallChatHistory((prev)=>{
-            const updated = [newSession,...prev]
-            return updated
-        })
-    }
-
-    useEffect(()=>{
-      if(allChatHistory.length>0){
-        localStorage.setItem("all_chat_history",JSON.stringify(allChatHistory))
-
-    //    console.log("all data ", localStorage.getItem("all_chat_history"))
-
+  // Persistence Logic
+  useEffect(() => {
+    const storedAll = localStorage.getItem("vault_chat_history");
+    const activeId = localStorage.getItem("active_vault_id");
+    if (storedAll) {
+      const parsedAll: chatArray[] = JSON.parse(storedAll);
+      setAllChatHistory(parsedAll);
+      if (activeId) {
+        const activeSession = parsedAll.find((s) => s.id === activeId);
+        if (activeSession) { setHistory(activeSession.chatHistoryArray); setCurrentChatId(activeId); }
       }
-
-    },[allChatHistory])
- 
-
-
-
-    function handleClearHistory() {
-        setHistory([])
-        localStorage.removeItem("Chat-history")
-        SettoggleTyped(false)
     }
-
-    useEffect(() => {
-        if (history.length > 0) {
-            localStorage.setItem("Chat-history", JSON.stringify(history))
-        }
-
-    }, [history])
-
-
-
-    useEffect(() => {
-        const storedHistory = localStorage.getItem("Chat-history")
-        if (storedHistory) {
-            setHistory(JSON.parse(storedHistory))
-            SettoggleTyped(true)
-        }
-
-    }, [])
-
-
-
-
-    function handleInputvalue(e: React.ChangeEvent<HTMLTextAreaElement>) {
-
-        let inputTxt = e.target.value
-        Setinputmsg(inputTxt)
-
-
-    }
-
-
-    function handleAbort() {
-
-        abortRef.current?.abort()
-        setisStream(false)
-
-    }
-
-
-    async function handleApiCall() {
-
-        try {
-            if (!inputmsg.trim()) {
-                console.log("pls write someText")
-                return;
-
-            }
-
-
-            abortRef.current = new AbortController()
-
-
-
-            const userMessage: chatHistory = { role: "user", content: inputmsg }
-            setHistory((prev) => [...prev, userMessage])
-
-
-            SettoggleTyped(true)
-
-
-
-            let sendingInput = await fetch("http://localhost:4000/chat", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: inputmsg,
-
-                }),
-                signal: abortRef.current.signal
-            })
-
-
-
-            const reader = sendingInput.body?.getReader()
-            if (!reader) return;
-            const decoder = new TextDecoder();
-
-            let botText = "";
-
-            console.log(reader)
-
-            const botMessage: chatHistory = { role: "bot", content: "" }
-            setHistory((prev) => [...prev, botMessage])
-
-
-            Setinputmsg("")
-
-
-            try {
-                while (true) {
-
-                    const { done, value } = await reader!.read();
-                    if (done) break;
-
-                    botText += decoder.decode(value);
-
-
-                    setHistory(prev => {
-                        const updated = [...prev];
-                        updated[updated.length - 1].content = botText;
-                        return updated;
-                    });
-                    setisStream(true)
-                }
-                setisStream(false)
-
-
-            } catch (error: any) {
-
-                if (error.name === "AbortError") { alert("stream aborted") }
-                else {
-                    alert(error)
-                }
-            }
-
-
-        } catch (error: any) {
-
-            console.log(error)
-        }
-
-        
-
-    }
-
-
-
-
-    return (
-        <div className={` h-[90%] flex   flex-col text-sm    `}>
-            {!toggleTyped && (<p className="font-semibold text-sm pt-20 pl-7  md:text-xl mt-[20%] md:ml-[35%] m-4   ">This is ChatBot for your Assistance </p>
-            )}
-
-
-            <div className={` ${toggleTyped ? "fixed bottom-[40%] ml-5 md:bottom-4 md:ml-46  w-[68%]  " : " w-[70%]  ml-8  md:ml-42  "}`}>
-                <div className={`bg-black rounded-xl flex   `}>
-                    <div className="flex m-3">
-                        <button>+</button>
-                    </div>
-                    <textarea placeholder="write something ..." value={inputmsg} onChange={handleInputvalue} className="w-[90%]  outline-none items-start p-3 field-sizing-content">
-
-                    </textarea>
-                    <div className="flex">
-                        {isStream ? <button className="cursor-pointer" onClick={handleAbort}>🚫</button> : <button onClick={handleApiCall} className="cursor-pointer">🚀</button>}
-
-                        <button onClick={handleClearHistory}>⌚</button>
-                        <button onClick={handleAllChatsHistory}>click</button>
-                    </div>
-                </div>
-            </div>
-
-
-
-
-            <div className="  mt-15 h-110 md:h-150     w-[80%]  ml-[12%] overflow-y-auto hide-scrollbar    ">
-
-                {history.map((msg, i) => (
-                    <div key={i} >
-                        {msg.role == "user" ?
-                            (<div className="bg-gray-600 rounded-2xl flex items-center justify-end mb-3  p-2 font-semibold ">
-                                <div><ReactMarkdown   remarkPlugins={[remarkGfm]} >
-                                    {msg.content}
-                                </ReactMarkdown></div>
-                                <button className="bg-red-500  rounded-xl  text-xs p-1 m-2">copy</button>
-
-                            </div>
-                            ) :
-                            (<div className="bg-black rounded-2xl  mb-3  p-3 font-semibold   ">
-                               <div ><ReactMarkdown   remarkPlugins={[remarkGfm]}  >
-                                    {msg.content}
-                                </ReactMarkdown></div>
-                                <button className="bg-gray-600  rounded-xl   text-xs p-1 m-2">📃 copy</button></div>)
-
-                        }
-                    </div>
-                ))}
-            </div>
-        </div>
-    )
+  }, []);
+
+  useEffect(() => {
+    if (allChatHistory.length > 0) localStorage.setItem("vault_chat_history", JSON.stringify(allChatHistory));
+  }, [allChatHistory]);
+
+  const syncToGlobalHistory = (chatId: string, updatedHistory: chatHistory[]) => {
+    setAllChatHistory((prev) => {
+      const existingIndex = prev.findIndex((s) => s.id === chatId);
+      if (existingIndex !== -1) {
+        const newAll = [...prev];
+        newAll[existingIndex] = { ...newAll[existingIndex], chatHistoryArray: updatedHistory };
+        return newAll;
+      } else {
+        return [{ id: chatId, chatName: updatedHistory[0].content.substring(0, 30) + "...", chatHistoryArray: updatedHistory }, ...prev];
+      }
+    });
+  };
+
+  const handleApiCall = async () => {
+    if (!inputmsg.trim() || isStream) return;
+    abortRef.current = new AbortController();
+    const chatId = currentChatId || Date.now().toString();
+    if (!currentChatId) { setCurrentChatId(chatId); localStorage.setItem("active_vault_id", chatId); }
+
+    const userMsg: chatHistory = { role: "user", content: inputmsg };
+    const historyWithUser = [...history, userMsg];
+    setHistory(historyWithUser);
+    setInputmsg("");
+    syncToGlobalHistory(chatId, historyWithUser);
+
+    try {
+      const response = await fetch("http://localhost:4000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: inputmsg }),
+        signal: abortRef.current.signal,
+      });
+
+      const reader = response.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      setIsStream(true);
+      let botContent = "";
+      setHistory((prev) => [...prev, { role: "bot", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        botContent += decoder.decode(value);
+        setHistory((prev) => {
+          const newArr = [...prev];
+          newArr[newArr.length - 1] = { role: "bot", content: botContent };
+          return newArr;
+        });
+      }
+      syncToGlobalHistory(chatId, [...historyWithUser, { role: "bot", content: botContent }]);
+    } catch (e) { console.error(e); } finally { setIsStream(false); }
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-orange-300 text-slate-200 overflow-hidden font-sans text-xs">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen} 
+        allHistory={allChatHistory} 
+        currentId={currentChatId} 
+        onNewChat={() => { setHistory([]); setCurrentChatId(null); localStorage.removeItem("active_vault_id"); setIsSidebarOpen(false); }}
+        onLoadChat={(s) => { setHistory(s.chatHistoryArray); setCurrentChatId(s.id); localStorage.setItem("active_vault_id", s.id); setIsSidebarOpen(false); }}
+      />
+      <div className="flex-1 flex flex-col relative min-w-0">
+        <Header setIsSidebarOpen={setIsSidebarOpen} currentChatId={currentChatId} history={history} isStream={isStream} />
+        <ChatMessages history={history} />
+        <ChatInput 
+          inputmsg={inputmsg} 
+          setInputmsg={setInputmsg} 
+          handleApiCall={handleApiCall} 
+          isStream={isStream} 
+          handleAbort={() => { abortRef.current?.abort(); setIsStream(false); }} 
+        />
+      </div>
+    </div>
+  );
 }
-
-export default SendText
